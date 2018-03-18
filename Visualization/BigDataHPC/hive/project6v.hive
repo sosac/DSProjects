@@ -1,0 +1,29 @@
+-- connie sosa : 4/19/2016 : ds730 : project 6
+-- project6v.hive
+
+-----------------------------------------------------------------
+-- problem 5: most errors player in all seasons
+
+CREATE VIEW IF NOT EXISTS most_e AS
+SELECT f1.id, f1.most_err
+FROM (SELECT id, SUM(errors) AS most_err
+     FROM fielding
+     WHERE errors is NOT NULL
+     GROUP BY id) f1
+JOIN (
+SELECT MAX(f2.player_total_err) AS most_err_player
+FROM (SELECT id, SUM(errors) AS player_total_err
+     FROM fielding
+     WHERE errors is NOT NULL
+     GROUP BY id) f2 
+     ) f3
+WHERE f1.most_err = f3.most_err_player;
+
+INSERT OVERWRITE DIRECTORY '/home/hduser/hive/pj6prob5' 
+SELECT fname, " ", lname, ":", most_e.most_err, "errors"
+FROM master JOIN most_e
+WHERE master.id = most_e.id;
+
+-- DROP VIEW most_e;
+
+

@@ -1,0 +1,189 @@
+-- connie sosa : 4/16/2016 : ds730 : project 6
+-- project6.hive
+-- hive script to solve baseball problems
+-- input files: Batting.csv, Master.csv, Fielding.csv
+
+DROP TABLE IF EXISTS master;
+CREATE EXTERNAL TABLE IF NOT EXISTS master(id STRING, byear INT, bmonth INT, bday INT, bcountry STRING, bstate STRING, bcity STRING, dyear INT, dmonth INT, dday INT, dcountry STRING, dstate STRING, dcity STRING, fname STRING, lname STRING, name STRING, weight INT, height INT, bats STRING, throws STRING, debut STRING, finalgame STRING, retro STRING, bbref STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LOCATION '/home/hduser/hive/master';
+
+DROP TABLE IF EXISTS batting;
+CREATE EXTERNAL TABLE IF NOT EXISTS batting(id STRING, year INT, team STRING, league STRING, games INT, ab INT, runs INT, hits INT, doubles INT, triples INT, homeruns INT, rbi INT, sb INT, cs INT, walks INT, strikeouts INT, ibb INT, hbp INT, sh INT, sf INT, gidp INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LOCATION '/home/hduser/hive/batting';
+
+DROP TABLE IF EXISTS fielding;
+CREATE EXTERNAL TABLE IF NOT EXISTS fielding(id STRING, year INT, team STRING, league STRING, position INT, games INT, gs INT, innOuts INT, putouts INT, assists INT, errors INT, dp INT, pb INT, wp INT, sb INT, cs INT, zrating INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LOCATION '/home/hduser/hive/fielding';
+
+-----------------------------------------------------------------
+-- problem 1: player had the most at bats (AB) in his career
+-- use max function instead of sort and limit in case of a tie
+
+CREATE VIEW IF NOT EXISTS most_ab AS
+SELECT b1.id, b1.total_abs
+FROM (SELECT batting.id, SUM(batting.ab) AS total_abs
+     FROM batting
+     GROUP BY batting.id) b1
+JOIN (
+SELECT MAX(b2.total_ab) AS max_ab
+FROM (SELECT id, SUM(ab) AS total_ab
+     FROM batting
+     GROUP BY id) b2
+     ) b3
+WHERE b1.total_abs = b3.max_ab;
+
+-- INSERT OVERWRITE DIRECTORY '/home/hduser/hive/pj6prob1' 
+SELECT fname, " ", lname, ",", bcity, ":", most_ab.total_abs
+FROM master JOIN most_ab
+WHERE master.id = most_ab.id;
+
+-- DROP VIEW most_ab;
+
+-----------------------------------------------------------------
+-- problem 2: top 3 birthdates
+
+-- INSERT OVERWRITE DIRECTORY '/home/hduser/hive/pj6prob2' 
+SELECT bmonth, '/', bday, ':', count(id) AS num_people 
+FROM master
+WHERE bday is NOT NULL AND bmonth is NOT NULL
+GROUP BY bmonth, bday
+SORT BY num_people DESC LIMIT 3;
+
+-----------------------------------------------------------------
+-- problem 3: 2nd most common weight
+
+CREATE VIEW IF NOT EXISTS common_wt AS
+SELECT weight, COUNT(id) AS wt_tally
+FROM master
+WHERE weight is NOT NULL
+GROUP BY weight
+SORT BY wt_tally DESC;
+
+-- rid off most common weight, get 2nd most common weight
+
+-- INSERT OVERWRITE DIRECTORY '/home/hduser/hive/pj6prob3' 
+SELECT c2.weight, "count:", c2.wt_tally 
+FROM common_wt c2
+WHERE c2.wt_tally NOT IN (SELECT MAX(c1.wt_tally) FROM common_wt c1)
+SORT BY c2.wt_tally DESC LIMIT 1;
+
+-- DROP VIEW common_wt;
+
+-----------------------------------------------------------------
+-- problem 4: most errors team in 2001
+
+-- INSERT OVERWRITE DIRECTORY '/home/hduser/hive/pj6prob4' 
+SELECT f1.team, ":", f1.most_err
+FROM (SELECT team, SUM(errors) AS most_err
+     FROM fielding
+     WHERE year=2001 AND errors is NOT NULL
+     GROUP BY team) f1
+JOIN (
+SELECT MAX(f2.team_total_err) AS most_err_team
+FROM (SELECT team, SUM(errors) AS team_total_err
+     FROM fielding
+     WHERE year=2001 AND errors is NOT NULL
+     GROUP BY team) f2 
+     ) f3
+WHERE f1.most_err = f3.most_err_team;
+
+-----------------------------------------------------------------
+-- problem 5: most errors player in all seasons
+
+CREATE VIEW IF NOT EXISTS most_e AS
+SELECT f1.id, f1.most_err
+FROM (SELECT id, SUM(errors) AS most_err
+     FROM fielding
+     WHERE errors is NOT NULL
+     GROUP BY id) f1
+JOIN (
+SELECT MAX(f2.player_total_err) AS most_err_player
+FROM (SELECT id, SUM(errors) AS player_total_err
+     FROM fielding
+     WHERE errors is NOT NULL
+     GROUP BY id) f2 
+     ) f3
+WHERE f1.most_err = f3.most_err_player;
+
+-- INSERT OVERWRITE DIRECTORY '/home/hduser/hive/pj6jprob5' 
+SELECT fname, " ", lname, ":", most_e.most_err, "errors"
+FROM master JOIN most_e
+WHERE master.id = most_e.id;
+
+-- DROP VIEW most_e;
+
+-----------------------------------------------------------------
+-- problem 6: top 3 players from 2005-2009
+-- get hits and ab (at bats) from batting table
+-- get errors and games from fielding table
+-- get fname and lname from master table
+
+CREATE VIEW IF NOT EXISTS bat_stat AS 
+SELECT b1.id, SUM(b1.hits) AS total_hits, SUM(b1.ab) AS total_ab
+FROM batting b1
+WHERE b1.ab >= 40 AND b1.hits is NOT NULL AND b1.year <= 2009 AND b1.year >= 2005
+GROUP BY b1.id;
+
+CREATE VIEW IF NOT EXISTS field_stat AS
+SELECT f2.id, SUM(f2.games) AS total_games, SUM(f2.errors) AS total_errors
+FROM fielding f2
+WHERE f2.games >= 20 AND f2.errors is NOT NULL AND f2.year <= 2009 AND f2.year >= 2005
+GROUP BY f2.id;
+
+-- INSERT OVERWRITE DIRECTORY '/home/hduser/hive/pj6prob6' 
+SELECT b1.id, ",", m.fname, " ", m.lname, ":", ROUND((total_hits/total_ab) - (f2.total_errors/f2.total_games), 4) AS play_avg
+FROM bat_stat b1 JOIN field_stat f2 ON (b1.id = f2.id) JOIN master m ON (m.id = b1.id)
+SORT BY play_avg DESC LIMIT 3;
+
+-- DROP VIEW bat_stat;
+-- DROP VIEW field_stat;
+
+-----------------------------------------------------------------
+-- problem 7: top 5 birthCity/birthState with most (doubles + triples)
+
+-- INSERT OVERWRITE DIRECTORY '/home/hduser/hive/pj6prob7' 
+SELECT master.bcity, master.bstate, SUM(player_total_23) AS most_23
+FROM master JOIN 
+     (SELECT id, SUM(doubles + triples) AS player_total_23
+     FROM batting
+     WHERE doubles is NOT NULL AND triples is NOT NULL
+     GROUP BY id) b3
+WHERE master.id = b3.id AND master.bcity is NOT NULL AND master.bstate is NOT NULL
+GROUP BY master.bcity, master.bstate 
+SORT BY most_23 DESC LIMIT 5;
+
+-----------------------------------------------------------------
+-- problem 8: birth month/birth state produced the worst players
+-- get hits and ab (at bats) from batting table
+-- get bmonth and bstate from master table 
+-- filter out less than 3 people from the same month/state 
+
+CREATE VIEW IF NOT EXISTS bat_list AS
+SELECT id, hits, ab
+FROM batting
+WHERE hits is NOT NULL AND ab is NOT NULL;
+
+CREATE VIEW IF NOT EXISTS mast_list AS
+SELECT m.id, m.bmonth, m.bstate
+FROM master m JOIN 
+     (SELECT COUNT(id) AS num_player, bmonth, bstate
+     FROM master 
+     WHERE bmonth >=0 AND bstate is NOT NULL
+     GROUP BY bmonth, bstate
+     HAVING num_player >= 3 ) m3
+WHERE m.bmonth = m3.bmonth AND m.bstate = m3.bstate;
+
+CREATE VIEW IF NOT EXISTS combine_list1 AS
+SELECT m.bmonth AS month, m.bstate AS state, SUM(b1.hits) AS total_hits, SUM(b1.ab) AS total_ab, SUM(b1.hits)/SUM(b1.ab) AS bat_avg 
+FROM bat_list b1 JOIN mast_list m ON (b1.id = m.id)
+GROUP BY m.bmonth, m.bstate;
+
+-- INSERT OVERWRITE DIRECTORY '/home/hduser/hive/pj6prob8' 
+SELECT month, state, bat_avg
+FROM combine_list1
+WHERE bat_avg IN (SELECT MIN(bat_avg) FROM combine_list1);
+
+-- DROP VIEW bat_list;
+-- DROP VIEW mast_list;
+-- DROP VIEW combine_list1;
+
+
+
+

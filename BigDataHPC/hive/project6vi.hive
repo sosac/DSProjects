@@ -1,0 +1,29 @@
+-- connie sosa : 4/19/2016 : ds730 : project 6
+-- project6vi.hive
+
+-----------------------------------------------------------------
+-- problem 6: top 3 players from 2005-2009
+-- get hits and ab (at bats) from batting table
+-- get errors and games from fielding table
+-- get fname and lname from master table
+
+CREATE VIEW IF NOT EXISTS bat_stat AS 
+SELECT b1.id, SUM(b1.hits) AS total_hits, SUM(b1.ab) AS total_ab
+FROM batting b1
+WHERE b1.ab >= 40 AND b1.hits is NOT NULL AND b1.year <= 2009 AND b1.year >= 2005
+GROUP BY b1.id;
+
+CREATE VIEW IF NOT EXISTS field_stat AS
+SELECT f2.id, SUM(f2.games) AS total_games, SUM(f2.errors) AS total_errors
+FROM fielding f2
+WHERE f2.games >= 20 AND f2.errors is NOT NULL AND f2.year <= 2009 AND f2.year >= 2005
+GROUP BY f2.id;
+
+INSERT OVERWRITE DIRECTORY '/home/hduser/hive/pj6prob6' 
+SELECT b1.id, ",", m.fname, " ", m.lname, ":", ROUND((total_hits/total_ab) - (f2.total_errors/f2.total_games), 4) AS play_avg
+FROM bat_stat b1 JOIN field_stat f2 ON (b1.id = f2.id) JOIN master m ON (m.id = b1.id)
+SORT BY play_avg DESC LIMIT 3;
+
+-- DROP VIEW bat_stat;
+-- DROP VIEW field_stat;
+

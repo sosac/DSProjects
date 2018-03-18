@@ -1,0 +1,21 @@
+-- connie sosa : 4/19/2016 : ds730 : project 6
+-- project6iv.hive
+
+-----------------------------------------------------------------
+-- problem 4: most errors team in 2001
+
+INSERT OVERWRITE DIRECTORY '/home/hduser/hive/pj6prob4' 
+SELECT f1.team, ":", f1.most_err
+FROM (SELECT team, SUM(errors) AS most_err
+     FROM fielding
+     WHERE year=2001 AND errors is NOT NULL
+     GROUP BY team) f1
+JOIN (
+SELECT MAX(f2.team_total_err) AS most_err_team
+FROM (SELECT team, SUM(errors) AS team_total_err
+     FROM fielding
+     WHERE year=2001 AND errors is NOT NULL
+     GROUP BY team) f2 
+     ) f3
+WHERE f1.most_err = f3.most_err_team;
+
