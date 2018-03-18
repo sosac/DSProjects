@@ -1,0 +1,108 @@
+---
+title: "DS710: week15: tweet final project"
+author: "connie sosa"
+date: "December 9, 2015"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+setwd("C:/Users/connie/UW/DS710/ds710finalproject/")
+#tweetData <- read.csv(head=FALSE, "Tweets_20151209_005802.csv")
+#tweetData <- read.csv(head=FALSE, "TweetsData.csv")
+tweetData <- read.csv(head=FALSE, "TweetsX1212.csv")
+
+attach(tweetData)
+
+#tweetMatrix <- matrix(tweetData)
+unique_users <- unique(V2)
+num_of_users <- length(unique_users)
+### matrix with 3 columns: user id, time zone, and region
+### user has multiple tweets, interested in user's time zone, which provides user's location.
+tweetMatrix <- matrix(unique_users, nrow=num_of_users, ncol=3, byrow=FALSE)
+tweetMatrix[,2] <- NA
+tweetMatrix[,3] <- NA
+num_rows <- nrow(tweetData)
+
+### obtained 3 IARU region information from 
+###https://en.wikipedia.org/wiki/International_Amateur_Radio_Union
+###http://www.iaru.org/regions.html
+tzRegion <- read.csv(head=FALSE, "timezoneRegionMap.csv")
+
+for (i in 1:num_of_users) {
+#  print(i)
+  matched_index <- which(tweetData$V2 == tweetMatrix[i, 1])
+
+  ### multiple tweets from same user, just use the 1st time zone from V4
+  timez <- as.character(V4[matched_index[1]]) 
+  
+  if (timez == "") {
+      ### replace blank timezone with NA
+     timez <- NA
+     region <- NA
+  } else {
+#      print(timez)
+      ### combine time zone locations, group them into 3 IARU regions
+      ### find the corresponding region for the time zone in TweetData, from tzRegion
+#      tz_index <- which(as.character(tzRegion$V1) == tweetMatrix[i, 2]) ### wrong
+      tz_index <- which(as.character(tzRegion$V1) == timez)
+#      print(tz_index[1])
+      region <- tzRegion$V2[tz_index[1]]
+#      print(region)
+  }
+  tweetMatrix[i, 2] <- timez
+  tweetMatrix[i, 3] <- region
+}
+
+#plot time zone
+tz_freq_table <- table(tweetMatrix[,2])
+tz_freq_df <- as.data.frame(tz_freq_table)
+location_order <- order(tz_freq_df$Freq)
+### display bar plot of the users' location based on time zone informaion
+
+tz_freq_table_prop <- prop.table(tz_freq_table)
+tz_freq_prop_df <- as.data.frame(tz_freq_table_prop)
+location_order_prop <- order(tz_freq_prop_df$Freq)
+### display bar plot of the users' location based on time zone informaion
+barplot(tz_freq_prop_df$Freq[location_order_prop], names.arg=tz_freq_prop_df$Var1[location_order_prop], las=2, main="Users Location Frequency Proportion")
+
+### plot region
+region_freq_table <- table(tweetMatrix[,3])
+region_freq_df <- as.data.frame(region_freq_table)
+region_order <- order(region_freq_df$Freq)
+### display bar plot of the users' location based on time zone informaion
+#barplot(region_freq_df$Freq[region_order], names.arg=tz_freq_df$Var1[region_order], las=2, main="User Region Frequency")
+
+region_freq_table_prop <- prop.table(region_freq_table)
+region_freq_prop_df <- as.data.frame(region_freq_table_prop)
+region_freq_prof_df
+region_order_prop <- order(region_freq_prop_df$Freq)
+### display bar plot of the users' location based on time zone informaion
+barplot(region_freq_prop_df$Freq[region_order_prop], names.arg=region_freq_prop_df$Var1[region_order_prop], las=2, xlab="International Amateur Radio U Regions", main="User Region Frequency Proportion")
+
+### hamStat.csv compiled from the following sites of 
+### http://swarl.org/article/articles/other-articles/ham-radio-population-statistics 
+### http://www.n0hr.com/ham_radio_population.htm
+hamStat <- read.csv(header=FALSE, "hamStat.csv")
+
+ham_cnt_by_region <- tapply(hamStat$V2, hamStat$V3, FUN=sum)
+ham_cnt_by_region
+barplot(ham_cnt_by_region, xlab="International Amateur Radio U Regions", main="User Region Frequency Proportion")
+
+ham_cnt_region_prop <- prop.table(ham_cnt_by_region)
+ham_cnt_region_prop
+ham_cnt_region_prop_df <- as.data.frame(ham_cnt_region_prop)
+allregion_order_prop <- order(ham_cnt_region_prop_df$ham_cnt_region_prop)
+### debug the following barplot: maybe skip it?
+#barplot(allregion_freq_prop_df$allregion_order_prop, names.arg = allregion_order_prop_df$[allregion_order_prop], las=2, xlab="International Amateur Radio U Regions", main="User Region Frequency Proportion")
+
+### conduct Chi square test to see if sample of ham twitter users matches
+### according to the resources, IARU Region 1: 13.92%, Region 2: 28.66%, Region 3: 57.42% of the world hamr population.
+
+### continue with this:
+#chisq.test(c(3 regions ham count), p=c(0.1392360, 0.2865521, 0.5742119 ))
+
+```
